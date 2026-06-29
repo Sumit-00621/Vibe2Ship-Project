@@ -1,0 +1,581 @@
+You are a senior full-stack engineer, UI/UX designer, AI engineer, and Firebase expert.
+
+Build a complete production-quality hackathon MVP called:
+
+# Deadline Guardian AI
+
+Tagline:
+"The AI-Powered Proactive Productivity Companion"
+
+The application should be fully functional, responsive, modern, and ready for deployment.
+
+==================================================
+TECH STACK
+==================================================
+
+Frontend
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- Framer Motion
+- Lucide React
+- React Router
+
+Backend
+- Firebase Firestore
+- Firebase Storage
+- Firebase Hosting compatible
+- Firebase Cloud Functions (optional)
+
+AI
+- Google Gemini 2.5 Flash API
+
+Charts
+- Recharts
+
+Notifications
+- Sonner Toast
+
+State Management
+- React Context + Hooks
+
+==================================================
+DESIGN STYLE
+==================================================
+
+Create a premium SaaS UI.
+
+Theme:
+Dark Mode
+
+Primary:
+Blue
+
+Secondary:
+Purple
+
+Accent:
+Cyan
+
+Rounded cards
+
+Smooth animations
+
+Glassmorphism
+
+Gradient backgrounds
+
+Beautiful shadows
+
+Professional spacing
+
+Responsive for desktop, tablet, and mobile.
+
+==================================================
+PROJECT STRUCTURE
+==================================================
+
+Create clean architecture.
+
+src/
+
+components/
+pages/
+hooks/
+services/
+types/
+utils/
+contexts/
+assets/
+
+==================================================
+MAIN PAGES
+==================================================
+
+1. Dashboard
+
+Display
+
+• Total Tasks
+
+• Completed Tasks
+
+• High Risk Tasks
+
+• Productivity Score
+
+• Upcoming Deadlines
+
+Charts
+
+• Completion Rate
+
+• Weekly Productivity
+
+• Risk Distribution
+
+Today's Focus
+
+Recent Activity
+
+Quick Actions
+
+==================================================
+
+2. Task Management
+
+Users can
+
+Create Task
+
+Edit Task
+
+Delete Task
+
+Complete Task
+
+Task Fields
+
+Title
+
+Description
+
+Deadline
+
+Estimated Hours
+
+Available Hours
+
+Energy Level
+
+Progress
+
+Priority
+
+==================================================
+AI FEATURE 1
+Task Breakdown
+==================================================
+
+Button
+
+Generate AI Breakdown
+
+Use Gemini 2.5 Flash.
+
+Prompt Gemini to generate
+
+Subtasks
+
+Estimated Time
+
+Difficulty
+
+Dependencies
+
+Display subtasks inside beautiful cards.
+
+Save subtasks into Firestore.
+
+==================================================
+AI FEATURE 2
+Risk Prediction
+==================================================
+
+Button
+
+Analyze Deadline Risk
+
+Gemini analyzes
+
+Deadline
+
+Progress
+
+Estimated Hours
+
+Available Hours
+
+Complexity
+
+Return
+
+Risk Score
+
+Risk Level
+
+Explanation
+
+Recommendations
+
+Risk Levels
+
+Low
+
+Medium
+
+High
+
+Critical
+
+Display
+
+Circular progress
+
+Risk badge
+
+Color indicators
+
+==================================================
+AI FEATURE 3
+Emergency Rescue Mode
+==================================================
+
+If
+
+Risk Score >=70
+
+Display
+
+Emergency Rescue Mode
+
+Button
+
+Activate Rescue Plan
+
+Gemini generates
+
+Critical Tasks
+
+Tasks to Skip
+
+Scope Reduction
+
+Execution Timeline
+
+Recovery Strategy
+
+Recommended AI Tools
+
+Display timeline beautifully.
+
+==================================================
+AI FEATURE 4
+AI Accountability Coach
+==================================================
+
+Generate Coaching Report
+
+Gemini analyzes
+
+Completed Tasks
+
+Pending Tasks
+
+Productivity
+
+Risk
+
+Generate
+
+Assessment
+
+Feedback
+
+Recommendations
+
+Recovery Actions
+
+Motivational Message
+
+Display as dashboard widgets.
+
+==================================================
+Analytics
+==================================================
+
+Display
+
+Completion Rate
+
+Average Risk
+
+High Risk Tasks
+
+Weekly Productivity
+
+Rescue Plans Used
+
+Charts
+
+Line Chart
+
+Bar Chart
+
+Pie Chart
+
+==================================================
+Firestore
+==================================================
+
+Collections
+
+tasks
+
+rescuePlans
+
+coachReports
+
+Store
+
+Tasks
+
+Subtasks
+
+Risk Analysis
+
+AI Responses
+
+Execution Plans
+
+Coach Reports
+
+Use realtime listeners.
+
+Persist data after refresh.
+
+==================================================
+Gemini Integration
+==================================================
+
+Create reusable AI service.
+
+Functions
+
+generateTaskBreakdown()
+
+predictRisk()
+
+generateRescuePlan()
+
+generateCoachInsights()
+
+Store API key inside .env
+
+Never hardcode secrets.
+
+==================================================
+Authentication
+==================================================
+
+For MVP
+
+Authentication should be optional.
+
+If Firebase Authentication is configured
+
+Use Google Login.
+
+Otherwise
+
+Automatically use Demo User
+
+uid
+
+demo-user
+
+No authentication errors.
+
+==================================================
+Routing
+==================================================
+
+/
+
+Dashboard
+
+/tasks
+
+Task Management
+
+/risk
+
+Risk Analysis
+
+/rescue
+
+Emergency Rescue
+
+/coach
+
+AI Coach
+
+/analytics
+
+Analytics
+
+==================================================
+Reusable Components
+==================================================
+
+Navbar
+
+Sidebar
+
+Task Card
+
+Risk Card
+
+Analytics Card
+
+AI Insight Card
+
+Timeline
+
+Charts
+
+Loading Spinner
+
+Skeleton Loader
+
+Empty State
+
+Error State
+
+Modal
+
+Confirmation Dialog
+
+==================================================
+Animations
+==================================================
+
+Framer Motion
+
+Page transitions
+
+Hover effects
+
+Card animations
+
+Button animations
+
+Progress animations
+
+==================================================
+Notifications
+==================================================
+
+Show toast notifications for
+
+Task Created
+
+Task Updated
+
+Task Deleted
+
+AI Completed
+
+Firestore Saved
+
+Errors
+
+==================================================
+Error Handling
+==================================================
+
+Handle
+
+Firestore errors
+
+Gemini errors
+
+Network failures
+
+Invalid inputs
+
+Missing API keys
+
+If Gemini fails
+
+Use intelligent mock responses.
+
+Application must never crash.
+
+==================================================
+Environment Variables
+==================================================
+
+Generate .env.example
+
+Include
+
+VITE_FIREBASE_API_KEY=
+
+VITE_FIREBASE_AUTH_DOMAIN=
+
+VITE_FIREBASE_PROJECT_ID=
+
+VITE_FIREBASE_STORAGE_BUCKET=
+
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+
+VITE_FIREBASE_APP_ID=
+
+VITE_GEMINI_API_KEY=
+
+==================================================
+Performance
+==================================================
+
+Lazy load pages.
+
+Optimize rendering.
+
+Use memoization where needed.
+
+Code splitting.
+
+==================================================
+Documentation
+==================================================
+
+Generate README.md
+
+Include
+
+Installation
+
+Configuration
+
+Running
+
+Firebase Setup
+
+Gemini Setup
+
+Deployment
+
+==================================================
+Output
+==================================================
+
+Generate the complete project.
+
+The project must work after running
+
+npm install
+
+npm run dev
+
+No placeholder pages.
+
+No TODO comments.
+
+Generate production-ready code suitable for a hackathon demonstration.
+
+Ensure all AI features are connected through reusable service functions.
+
+Use clean architecture, reusable components, and maintainable TypeScript code.
