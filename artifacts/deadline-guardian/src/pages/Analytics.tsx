@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { useGetWeeklyAnalytics } from "@workspace/api-client-react";
+import { subscribeTasks } from "@/services/taskService";
+import { Task } from "@/types/task";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
@@ -7,11 +8,51 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from "recharts";
 import { BarChart3 } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 
 export default function Analytics() {
-  const { data: weeklyData, isLoading } = useGetWeeklyAnalytics();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock data if API is empty/missing
+  useEffect(() => {
+    const unsubscribe = subscribeTasks((fetchedTasks) => {
+      setTasks(fetchedTasks);
+      setIsLoading(false);
+    }, () => {
+      setIsLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  const weeklyData = useMemo(() => {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const now = new Date();
+
+    return days.map((day, i) => {
+      const date = new Date(now);
+      date.setDate(now.getDate() - (now.getDay() - i + 7) % 7);
+      const dateStr = date.toDateString();
+
+      const dayTasks = tasks.filter((t) => {
+        return t.updatedAt ? new Date(t.updatedAt).toDateString() === dateStr : false;
+      });
+
+      const completed = dayTasks.filter((t) => t.status === "completed").length;
+      const created = tasks.filter((t) => {
+        return t.createdAt ? new Date(t.createdAt).toDateString() === dateStr : false;
+      }).length;
+
+      const risked = dayTasks.filter((t) => t.riskScore != null);
+      const riskAvg =
+        risked.length > 0
+          ? risked.reduce((s, t) => s + (t.riskScore ?? 0), 0) / risked.length
+          : 0;
+
+      return { day, completed, created, riskAvg: Math.round(riskAvg) };
+    });
+  }, [tasks]);
+
+  // Mock data if database is empty to keep UI populated on first load
   const defaultData = [
     { day: "Mon", completed: 4, created: 5, riskAvg: 45 },
     { day: "Tue", completed: 7, created: 3, riskAvg: 40 },
@@ -22,7 +63,7 @@ export default function Analytics() {
     { day: "Sun", completed: 6, created: 2, riskAvg: 35 },
   ];
 
-  const chartData = weeklyData && weeklyData.length > 0 ? weeklyData : defaultData;
+  const chartData = tasks.length > 0 ? weeklyData : defaultData;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {

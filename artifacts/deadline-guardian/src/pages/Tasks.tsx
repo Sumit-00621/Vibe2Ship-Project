@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useListTasks, useCreateTask, useUpdateTask, useDeleteTask, getListTasksQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { subscribeTasks, createTask, updateTask, deleteTask } from "@/services/taskService";
+import { Task } from "@/types/task";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Plus, Clock, AlertTriangle, Zap, CheckCircle2, Trash2 } from "lucide-react";
+import { Plus, Clock, Zap, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,13 +27,20 @@ const formSchema = z.object({
 });
 
 export default function Tasks() {
-  const queryClient = useQueryClient();
-  const { data: tasks, isLoading } = useListTasks();
-  const createTask = useCreateTask();
-  const updateTask = useUpdateTask();
-  const deleteTask = useDeleteTask();
-  
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = subscribeTasks((fetchedTasks) => {
+      setTasks(fetchedTasks);
+      setIsLoading(false);
+    }, () => {
+      setIsLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -47,35 +54,37 @@ export default function Tasks() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    createTask.mutate({ data: values }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-        setIsDialogOpen(false);
-        form.reset();
-        toast.success("Task created successfully");
-      },
-      onError: () => toast.error("Failed to create task")
-    });
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+    try {
+      await createTask(values);
+      setIsDialogOpen(false);
+      form.reset();
+      toast.success("Task created successfully");
+    } catch {
+      toast.error("Failed to create task");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleStatusToggle(id: number, currentStatus: string) {
+  async function handleStatusToggle(id: string, currentStatus: string) {
     const newStatus = currentStatus === 'completed' ? 'in_progress' : 'completed';
-    updateTask.mutate({ id, data: { status: newStatus as any } }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-        toast.success(`Task marked as ${newStatus.replace('_', ' ')}`);
-      }
-    });
+    try {
+      await updateTask(id, { status: newStatus as any });
+      toast.success(`Task marked as ${newStatus.replace('_', ' ')}`);
+    } catch {
+      toast.error("Failed to update task status");
+    }
   }
 
-  function handleDelete(id: number) {
-    deleteTask.mutate({ id }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-        toast.success("Task deleted");
-      }
-    });
+  async function handleDelete(id: string) {
+    try {
+      await deleteTask(id);
+      toast.success("Task deleted");
+    } catch {
+      toast.error("Failed to delete task");
+    }
   }
 
   const priorityColors = {
@@ -163,8 +172,8 @@ export default function Tasks() {
                     )}
                   />
                 </div>
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={createTask.isPending}>
-                  {createTask.isPending ? "Creating..." : "Create Task"}
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isSubmitting}>
+                  {isSubmitting ? "Creating..." : "Create Task"}
                 </Button>
               </form>
             </Form>

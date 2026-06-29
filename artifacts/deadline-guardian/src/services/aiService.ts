@@ -1,26 +1,30 @@
-import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, tasksTable } from "@workspace/db";
-import {
-  GenerateBreakdownBody,
-  AnalyzeRiskBody,
-  GenerateRescuePlanBody,
-  GenerateCoachInsightsBody,
-} from "@workspace/api-zod";
-import { generateContent } from "../lib/gemini";
-import { logger } from "../lib/logger";
+import { GoogleGenAI } from "@google/genai";
 
-const router: IRouter = Router();
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+if (!apiKey) {
+  console.warn("VITE_GEMINI_API_KEY not set — AI features will return mock responses");
+}
 
-router.post("/ai/breakdown", async (req, res): Promise<void> => {
-  const parsed = GenerateBreakdownBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
+export const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+
+// Helpers to call Gemini
+async function generateContent(prompt: string): Promise<string> {
+  if (!ai) {
+    throw new Error("No API key configured");
   }
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: { maxOutputTokens: 8192, responseMimeType: "application/json" },
+  });
+  return response.text ?? "{}";
+}
 
-  const { taskId, title, description, estimatedHours, deadline } = parsed.data;
-
+// 1. Task Breakdown
+export async function generateBreakdown(title: string, description?: string, estimatedHours?: number, deadline?: string) {
+  if (!ai) {
+    return mockBreakdown();
+  }
   const prompt = `You are a project planning AI. Break down this task into actionable subtasks.
 
 Task: "${title}"
@@ -45,51 +49,42 @@ Generate 3-7 practical subtasks. Be specific and actionable.`;
 
   try {
     const raw = await generateContent(prompt);
-    let parsed2: { subtasks: unknown[] };
-    try {
-      parsed2 = JSON.parse(raw);
-    } catch {
-      parsed2 = { subtasks: mockBreakdown() };
-    }
-
-    const subtasks = Array.isArray(parsed2.subtasks) ? parsed2.subtasks : mockBreakdown();
-
-    await db
-      .update(tasksTable)
-      .set({ subtasks: JSON.stringify(subtasks), updatedAt: new Date() })
-      .where(eq(tasksTable.id, taskId));
-
-    res.json({ taskId, subtasks });
+    const result = JSON.parse(raw);
+    return Array.isArray(result.subtasks) ? result.subtasks : mockBreakdown();
   } catch (err) {
-    req.log.error({ err }, "Breakdown generation failed");
-    const subtasks = mockBreakdown();
-    res.json({ taskId, subtasks });
+    console.error("Gemini breakdown error:", err);
+    return mockBreakdown();
   }
-});
+}
 
-router.post("/ai/risk", async (req, res): Promise<void> => {
-  const parsed = AnalyzeRiskBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const { taskId, title, description, deadline, progress, estimatedHours, availableHours, energyLevel } = parsed.data;
-
-  const deadlineDate = deadline ? new Date(deadline) : null;
+// 2. Risk Assessment
+export async function generateRiskAnalysis(task: {
+  title: string;
+  description?: string;
+  deadline?: string;
+  progress: number;
+  estimatedHours?: number;
+  availableHours?: number;
+  energyLevel?: string;
+}) {
+  const deadlineDate = task.deadline ? new Date(task.deadline) : null;
   const daysLeft = deadlineDate
     ? Math.max(0, Math.ceil((deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : null;
 
+  if (!ai) {
+    return mockRiskResult(task.progress, daysLeft);
+  }
+
   const prompt = `You are a deadline risk analysis AI. Analyze this task and predict the risk of missing the deadline.
 
-Task: "${title}"
-Description: "${description ?? "None"}"
-Deadline: ${deadline ?? "Not set"} (${daysLeft != null ? daysLeft + " days left" : "unknown"})
-Current Progress: ${progress}%
-Estimated Hours: ${estimatedHours ?? "Unknown"}
-Available Hours: ${availableHours ?? "Unknown"}
-Energy Level: ${energyLevel ?? "Not specified"}
+Task: "${task.title}"
+Description: "${task.description ?? "None"}"
+Deadline: ${task.deadline ?? "Not set"} (${daysLeft != null ? daysLeft + " days left" : "unknown"})
+Current Progress: ${task.progress}%
+Estimated Hours: ${task.estimatedHours ?? "Unknown"}
+Available Hours: ${task.availableHours ?? "Unknown"}
+Energy Level: ${task.energyLevel ?? "Not specified"}
 
 Return a JSON object with this exact structure:
 {
@@ -103,49 +98,36 @@ Risk levels: low (0-30), medium (31-60), high (61-80), critical (81-100).`;
 
   try {
     const raw = await generateContent(prompt);
-    let result: { riskScore: number; riskLevel: string; explanation: string; recommendations: string[] };
-    try {
-      result = JSON.parse(raw);
-    } catch {
-      result = mockRiskResult(progress, daysLeft);
-    }
-
-    await db
-      .update(tasksTable)
-      .set({
-        riskScore: result.riskScore,
-        riskLevel: result.riskLevel,
-        riskAnalysis: JSON.stringify(result),
-        updatedAt: new Date(),
-      })
-      .where(eq(tasksTable.id, taskId));
-
-    res.json({ taskId, ...result });
+    return JSON.parse(raw);
   } catch (err) {
-    req.log.error({ err }, "Risk analysis failed");
-    const fallback = mockRiskResult(progress, daysLeft);
-    res.json({ taskId, ...fallback });
+    console.error("Gemini risk analysis error:", err);
+    return mockRiskResult(task.progress, daysLeft);
   }
-});
+}
 
-router.post("/ai/rescue", async (req, res): Promise<void> => {
-  const parsed = GenerateRescuePlanBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
+// 3. Rescue Plan
+export async function generateRescuePlan(task: {
+  title: string;
+  description?: string;
+  deadline?: string;
+  progress: number;
+  estimatedHours?: number;
+  availableHours?: number;
+  riskScore?: number;
+}) {
+  if (!ai) {
+    return mockRescuePlan();
   }
-
-  const { taskId, title, description, deadline, progress, estimatedHours, availableHours, riskScore } = parsed.data;
 
   const prompt = `You are an emergency project rescue AI. This task is at critical risk. Generate an emergency rescue plan.
 
-Task: "${title}"
-Description: "${description ?? "None"}"
-Deadline: ${deadline ?? "Not set"}
-Current Progress: ${progress}%
-Estimated Hours: ${estimatedHours ?? "Unknown"}
-Available Hours: ${availableHours ?? "Unknown"}
-Risk Score: ${riskScore}/100
+Task: "${task.title}"
+Description: "${task.description ?? "None"}"
+Deadline: ${task.deadline ?? "Not set"}
+Current Progress: ${task.progress}%
+Estimated Hours: ${task.estimatedHours ?? "Unknown"}
+Available Hours: ${task.availableHours ?? "Unknown"}
+Risk Score: ${task.riskScore ?? 75}/100
 
 Return a JSON object with this exact structure:
 {
@@ -162,42 +144,20 @@ Return a JSON object with this exact structure:
 
   try {
     const raw = await generateContent(prompt);
-    let result: {
-      criticalTasks: string[];
-      tasksToSkip: string[];
-      scopeReduction: string;
-      timeline: { time: string; action: string; priority: string }[];
-      recoveryStrategy: string;
-      recommendedTools: string[];
-    };
-    try {
-      result = JSON.parse(raw);
-    } catch {
-      result = mockRescuePlan();
-    }
-
-    await db
-      .update(tasksTable)
-      .set({ rescuePlan: JSON.stringify(result), updatedAt: new Date() })
-      .where(eq(tasksTable.id, taskId));
-
-    res.json({ taskId, ...result });
+    return JSON.parse(raw);
   } catch (err) {
-    req.log.error({ err }, "Rescue plan generation failed");
-    const fallback = mockRescuePlan();
-    res.json({ taskId, ...fallback });
+    console.error("Gemini rescue plan error:", err);
+    return mockRescuePlan();
   }
-});
+}
 
-router.post("/ai/coach", async (req, res): Promise<void> => {
-  const parsed = GenerateCoachInsightsBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const { tasks } = parsed.data;
-
+// 4. Coach Insights
+export async function generateCoachInsights(tasks: Array<{
+  title: string;
+  status: string;
+  progress: number;
+  riskLevel?: string | null;
+}>) {
   const completed = tasks.filter((t) => t.status === "completed").length;
   const pending = tasks.filter((t) => t.status !== "completed").length;
   const highRisk = tasks.filter((t) => t.riskLevel === "high" || t.riskLevel === "critical").length;
@@ -205,6 +165,10 @@ router.post("/ai/coach", async (req, res): Promise<void> => {
     tasks.length > 0
       ? Math.round(tasks.reduce((s, t) => s + (t.progress ?? 0), 0) / tasks.length)
       : 0;
+
+  if (!ai) {
+    return mockCoachResult(completed, tasks.length);
+  }
 
   const prompt = `You are an AI productivity coach. Analyze this person's task performance and provide personalized coaching.
 
@@ -227,29 +191,14 @@ Return a JSON object with this exact structure:
 
   try {
     const raw = await generateContent(prompt);
-    let result: {
-      assessment: string;
-      feedback: string;
-      recommendations: string[];
-      recoveryActions: string[];
-      motivationalMessage: string;
-      productivityScore: number;
-    };
-    try {
-      result = JSON.parse(raw);
-    } catch {
-      result = mockCoachResult(completed, tasks.length);
-    }
-
-    res.json(result);
+    return JSON.parse(raw);
   } catch (err) {
-    logger.error({ err }, "Coach insights generation failed");
-    const fallback = mockCoachResult(completed, tasks.length);
-    res.json(fallback);
+    console.error("Gemini coach insights error:", err);
+    return mockCoachResult(completed, tasks.length);
   }
-});
+}
 
-// Mock fallbacks so the app never crashes without AI
+// Fallback Mock data
 function mockBreakdown() {
   return [
     { title: "Research and planning", estimatedTime: "1 hour", difficulty: "easy", dependencies: [], completed: false },
@@ -308,5 +257,3 @@ function mockCoachResult(completed: number, total: number) {
     productivityScore: rate,
   };
 }
-
-export default router;

@@ -1,52 +1,51 @@
 import { motion } from "framer-motion";
-import { useListTasks, useGenerateRescuePlan, useUpdateTask, getListTasksQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { subscribeTasks, saveRescuePlan } from "@/services/taskService";
+import { generateRescuePlan } from "@/services/aiService";
+import { Task } from "@/types/task";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LifeBuoy, Zap, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function Rescue() {
-  const queryClient = useQueryClient();
-  const { data: tasks, isLoading } = useListTasks();
-  const generateRescue = useGenerateRescuePlan();
-  const updateTask = useUpdateTask();
-  const [rescuingId, setRescuingId] = useState<number | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [rescuingId, setRescuingId] = useState<string | null>(null);
 
-  const criticalTasks = tasks?.filter(t => t.status !== 'completed' && (t.riskScore || 0) >= 70) || [];
+  useEffect(() => {
+    const unsubscribe = subscribeTasks((fetchedTasks) => {
+      setTasks(fetchedTasks);
+      setIsLoading(false);
+    }, () => {
+      setIsLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
-  function handleRescue(task: any) {
+  const criticalTasks = tasks.filter(t => t.status !== 'completed' && (t.riskScore || 0) >= 70);
+
+  async function handleRescue(task: Task) {
     setRescuingId(task.id);
-    generateRescue.mutate({
-      data: {
-        taskId: task.id,
+    try {
+      const result = await generateRescuePlan({
         title: task.title,
         deadline: task.deadline,
         progress: task.progress,
         riskScore: task.riskScore || 75,
         estimatedHours: task.estimatedHours || 4,
         description: task.description || "",
-      }
-    }, {
-      onSuccess: (result) => {
-        updateTask.mutate({
-          id: task.id,
-          data: { rescuePlan: JSON.stringify(result) }
-        }, {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-            toast.success("Emergency protocols activated");
-            setRescuingId(null);
-          }
-        });
-      },
-      onError: () => {
-        toast.error("Rescue protocol generation failed");
-        setRescuingId(null);
-      }
-    });
+      });
+
+      await saveRescuePlan(task.id, result);
+      toast.success("Emergency protocols activated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Rescue protocol generation failed");
+    } finally {
+      setRescuingId(null);
+    }
   }
 
   return (

@@ -1,30 +1,50 @@
 import { motion } from "framer-motion";
-import { useListTasks, useGenerateCoachInsights } from "@workspace/api-client-react";
+import { subscribeTasks, saveCoachReport } from "@/services/taskService";
+import { generateCoachInsights } from "@/services/aiService";
+import { Task } from "@/types/task";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BrainCircuit, Sparkles, Target, ArrowUpCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
 export default function Coach() {
-  const { data: tasks, isLoading: tasksLoading } = useListTasks();
-  const generateInsights = useGenerateCoachInsights();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [insights, setInsights] = useState<any>(null);
 
-  function handleGenerate() {
+  useEffect(() => {
+    const unsubscribe = subscribeTasks((fetchedTasks) => {
+      setTasks(fetchedTasks);
+      setTasksLoading(false);
+    }, () => {
+      setTasksLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  async function handleGenerate() {
     if (!tasks || tasks.length === 0) {
       toast.error("Need active tasks to generate coaching insights");
       return;
     }
 
-    generateInsights.mutate({ data: { tasks: tasks.filter(t => t.status !== 'completed') } }, {
-      onSuccess: (result) => {
-        setInsights(result);
-        toast.success("Coach report generated");
-      },
-      onError: () => toast.error("Failed to connect to AI Coach")
-    });
+    setIsGenerating(true);
+    try {
+      const activeTasks = tasks.filter(t => t.status !== 'completed');
+      const result = await generateCoachInsights(activeTasks);
+      
+      await saveCoachReport(result);
+      setInsights(result);
+      toast.success("Coach report generated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to connect to AI Coach");
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   return (
@@ -44,10 +64,10 @@ export default function Coach() {
         
         <Button 
           onClick={handleGenerate} 
-          disabled={tasksLoading || generateInsights.isPending}
+          disabled={tasksLoading || isGenerating}
           className="bg-purple-600 hover:bg-purple-700 text-white shadow-[0_0_20px_rgba(147,51,234,0.4)]"
         >
-          {generateInsights.isPending ? (
+          {isGenerating ? (
             <><Sparkles className="w-4 h-4 mr-2 animate-spin" /> Synthesizing...</>
           ) : (
             <><Sparkles className="w-4 h-4 mr-2" /> Request Coaching Session</>
@@ -55,7 +75,7 @@ export default function Coach() {
         </Button>
       </div>
 
-      {!insights && !generateInsights.isPending && (
+      {!insights && !isGenerating && (
         <Card className="bg-white/5 backdrop-blur-md border-white/10">
           <CardContent className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-20 h-20 rounded-full bg-purple-500/10 flex items-center justify-center mb-6 relative">
@@ -70,7 +90,7 @@ export default function Coach() {
         </Card>
       )}
 
-      {generateInsights.isPending && (
+      {isGenerating && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Skeleton className="md:col-span-3 h-32 bg-white/5 rounded-xl border border-white/10" />
           <Skeleton className="md:col-span-2 h-64 bg-white/5 rounded-xl border border-white/10" />
@@ -78,7 +98,7 @@ export default function Coach() {
         </div>
       )}
 
-      {insights && !generateInsights.isPending && (
+      {insights && !isGenerating && (
         <motion.div 
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}

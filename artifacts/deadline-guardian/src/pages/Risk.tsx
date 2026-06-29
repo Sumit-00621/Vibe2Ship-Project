@@ -1,58 +1,52 @@
 import { motion } from "framer-motion";
-import { useListTasks, useAnalyzeRisk, useUpdateTask, getListTasksQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { subscribeTasks, saveRiskReport } from "@/services/taskService";
+import { generateRiskAnalysis } from "@/services/aiService";
+import { Task } from "@/types/task";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShieldAlert, Activity, ArrowRight, ShieldCheck } from "lucide-react";
+import { ShieldAlert, ArrowRight, ShieldCheck, Activity } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function Risk() {
-  const queryClient = useQueryClient();
-  const { data: tasks, isLoading } = useListTasks();
-  const analyzeRisk = useAnalyzeRisk();
-  const updateTask = useUpdateTask();
-  const [analyzingId, setAnalyzingId] = useState<number | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
 
-  const activeTasks = tasks?.filter(t => t.status !== 'completed') || [];
+  useEffect(() => {
+    const unsubscribe = subscribeTasks((fetchedTasks) => {
+      setTasks(fetchedTasks);
+      setIsLoading(false);
+    }, () => {
+      setIsLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
-  function handleAnalyze(task: any) {
+  const activeTasks = tasks.filter(t => t.status !== 'completed');
+
+  async function handleAnalyze(task: Task) {
     setAnalyzingId(task.id);
-    analyzeRisk.mutate({
-      data: {
-        taskId: task.id,
+    try {
+      const result = await generateRiskAnalysis({
         title: task.title,
         deadline: task.deadline,
         progress: task.progress,
         estimatedHours: task.estimatedHours || 4,
         description: task.description || "",
         energyLevel: task.energyLevel || "medium"
-      }
-    }, {
-      onSuccess: (result) => {
-        // Save the result
-        updateTask.mutate({
-          id: task.id,
-          data: {
-            riskScore: result.riskScore,
-            riskLevel: result.riskLevel,
-            riskAnalysis: JSON.stringify(result)
-          }
-        }, {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-            toast.success("Risk analysis complete");
-            setAnalyzingId(null);
-          }
-        });
-      },
-      onError: () => {
-        toast.error("Failed to analyze risk");
-        setAnalyzingId(null);
-      }
-    });
+      });
+
+      await saveRiskReport(task.id, result);
+      toast.success("Risk analysis complete");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to analyze risk");
+    } finally {
+      setAnalyzingId(null);
+    }
   }
 
   const getRiskColor = (level?: string | null) => {
