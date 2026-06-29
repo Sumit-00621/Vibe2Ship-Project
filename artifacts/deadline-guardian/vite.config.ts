@@ -16,6 +16,12 @@ export default defineConfig({
     },
   },
 
+  css: {
+    postcss: {
+      plugins: [],
+    },
+  },
+
   build: {
     outDir: "dist",
     emptyOutDir: true,
@@ -24,5 +30,11 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
+    proxy: {
+      "/api": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+      },
+    },
   },
 });
