@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface BreakdownRequest {
+  taskId: number;
+  title: string;
+  description?: string;
+  estimatedHours?: number;
+  deadline?: string;
 }

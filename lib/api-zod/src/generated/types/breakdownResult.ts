@@ -5,7 +5,9 @@
  * Deadline Guardian AI API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Subtask } from './subtask';
 
-export interface HealthStatus {
-  status: string;
+export interface BreakdownResult {
+  taskId: number;
+  subtasks: Subtask[];
 }
